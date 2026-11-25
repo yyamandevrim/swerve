@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swerve — macOS DPI Control</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+  :root {
+    --bg: #0a0c12;
+    --bg-elev: #121520;
+    --bg-card: #161a26;
+    --bg-hover: #1e2334;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #eef1f8;
+    --text-dim: #8d97b0;
+    --text-muted: #5c657c;
+    --accent: #4d88ff;
+    --cyan: #48d5ff;
+    --accent-soft: rgba(77, 136, 255, 0.15);
+    --green: #34d399;
+    --green-soft: rgba(52, 211, 153, 0.14);
+    --amber: #fbbf24;
+    --amber-soft: rgba(251, 191, 36, 0.14);
+    --red: #f87171;
+    --red-soft: rgba(248, 113, 113, 0.14);
+    --purple: #a78bfa;
+    --purple-soft: rgba(167, 139, 250, 0.15);
+    --radius: 13px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body {
+    padding: 20px 24px 40px; max-width: 1400px; margin: 0 auto;
+    background-image: radial-gradient(circle at 12% 0%, rgba(77, 136, 255, 0.08), transparent 40%),
+                      radial-gradient(circle at 88% 0%, rgba(167, 139, 250, 0.07), transparent 36%);
+  }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .logo-img {
+    width: 42px; height: 42px; border-radius: 11px; object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 24px rgba(56, 128, 255, 0.22);
+  }
+  .brand h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.025em; display: flex; align-items: center; gap: 8px; }
+  .ver { font-size: 11px; font-family: var(--font-mono); color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border); padding: 2px 7px; border-radius: 999px; font-weight: 500; }
+  .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; font-family: var(--font-mono); }
+
+  .actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 550; background: var(--bg-card); border: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot.off { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  .dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  button {
+    font-family: var(--font-sans); font-size: 12.5px; font-weight: 550;
+    border-radius: 9px; padding: 8px 13px; border: 1px solid var(--border-strong);
+    background: var(--bg-card); color: var(--text); cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.08s;
+  }
+  button:hover { background: var(--bg-hover); border-color: rgba(255,255,255,0.22); }
+  button:active { transform: scale(0.98); }
+  button.primary { background: linear-gradient(135deg, #3b7bff, #686dff); border-color: transparent; color: #fff; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger { background: var(--red-soft); border-color: rgba(248,113,113,0.3); color: var(--red); }
+  button.danger:hover { background: rgba(248,113,113,0.22); }
+  button.success { background: var(--green-soft); border-color: rgba(52,211,153,0.3); color: var(--green); }
+  button.sm { padding: 4px 8px; font-size: 11px; border-radius: 6px; }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px;
+  }
+  .kpi {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 15px 16px;
+  }
+  .kpi-head { display: flex; align-items: center; justify-content: space-between; }
+  .kpi-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.055em; font-weight: 600; }
+  .kpi-val { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; font-family: var(--font-mono); }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.48fr) minmax(350px, 1fr); gap: 16px; align-items: start; }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card + .card { margin-top: 16px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .card-title { font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+  .card-body { padding: 14px 16px; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tabs { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .tab {
+    border: none; background: transparent; color: var(--text-dim); padding: 5px 9px; font-size: 11.5px; border-radius: 6px;
+  }
+  .tab.active { background: var(--bg-hover); color: var(--text); }
+
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+  .seg-btn {
+    padding: 8px 8px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--border);
+    color: var(--text-dim); text-align: center; font-size: 12px; font-weight: 600;
+  }
+  .seg-btn small { display: block; font-size: 10px; font-weight: 450; color: var(--text-muted); margin-top: 2px; }
+  .seg-btn.active {
+    background: var(--accent-soft); border-color: rgba(77, 136, 255, 0.55); color: var(--text);
+  }
+  .seg-btn.active small { color: #b6d0ff; }
+
+  .profiles-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .prof-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 11px; border-radius: 10px; background: var(--bg-elev); border: 1px solid var(--border);
+    cursor: pointer; transition: border-color 0.15s, background 0.15s; text-align: left;
+  }
+  .prof-card:hover { background: var(--bg-hover); }
+  .prof-card.on { background: rgba(52, 211, 153, 0.08); border-color: rgba(52, 211, 153, 0.35); }
+  .prof-name { font-size: 12.5px; font-weight: 620; color: var(--text); }
+  .prof-meta { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; font-family: var(--font-mono); }
+  .prof-pill { font-size: 10px; font-family: var(--font-mono); font-weight: 700; padding: 2px 6px; border-radius: 5px; }
+  .prof-card.on .prof-pill { background: var(--green-soft); color: var(--green); }
+  .prof-card:not(.on) .prof-pill { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+
+  input, select {
+    background: var(--bg-elev); color: var(--text); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-family: var(--font-sans); outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  .search { width: 150px; font-size: 12px; padding: 5px 9px; }
+
+  .table-wrap { max-height: 620px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th {
+    position: sticky; top: 0; background: var(--bg-elev); color: var(--text-dim);
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.045em;
+    padding: 9px 12px; border-bottom: 1px solid var(--border); z-index: 1;
+  }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  .mono { font-family: var(--font-mono); font-size: 11.8px; }
+  .host-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 6px;
+    font-size: 10.5px; font-weight: 650; font-family: var(--font-mono); text-transform: uppercase;
+  }
+  .b-bypass { background: var(--green-soft); color: var(--green); }
+  .b-auto   { background: rgba(72, 213, 255, 0.16); color: var(--cyan); }
+  .b-direct { background: rgba(140, 150, 173, 0.13); color: var(--text-dim); }
+  .b-reset  { background: var(--red-soft); color: var(--red); }
+  .b-error  { background: var(--amber-soft); color: var(--amber); }
+  .b-doh    { background: var(--purple-soft); color: var(--purple); margin-left: 4px; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .field label { display: block; font-size: 10.5px; color: var(--text-dim); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field select, .field input[type="number"] { width: 100%; }
+
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 11px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 10px;
+  }
+  .switch-row span { font-size: 12.5px; font-weight: 550; }
+  .switch-row small { display: block; font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+  .domain-add { display: flex; gap: 8px; margin-bottom: 10px; }
+  .domain-add input { flex: 1; font-family: var(--font-mono); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 7px;
+    font-family: var(--font-mono); font-size: 11.5px;
+  }
+  .chip.learned { border-color: rgba(72, 213, 255, 0.35); background: rgba(72, 213, 255, 0.08); }
+  .chip button {
+    border: none; background: transparent; color: var(--text-muted); padding: 0 3px; font-size: 12px; line-height: 1;
+  }
+  .chip button:hover { color: var(--text); background: transparent; }
+  .chip button.del:hover { color: var(--red); }
+
+  .test-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .test-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 10px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px;
+    font-family: var(--font-mono); font-size: 12px;
+  }
+
+  .empty { text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 12.5px; }
+
+  .toast {
+    position: fixed; bottom: 20px; right: 24px; z-index: 50;
+    background: #1f2536; color: var(--text); border: 1px solid var(--border-strong);
+    padding: 10px 14px; border-radius: 10px; font-size: 12.5px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    opacity: 0; transform: translateY(8px); pointer-events: none; transition: all 0.2s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 1024px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo-img" src="/logo.png" alt="Swerve">
+      <div>
+        <h1>Swerve <span class="ver" id="ver">v0.2.0</span></h1>
+        <div class="sub" id="subtitle">127.0.0.1:18080 · connecting...</div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="pill"><span class="dot" id="proxyDot"></span><span id="proxyText">Checking proxy...</span></div>
+      <button id="toggleProxyBtn" onclick="toggleProxy()">Toggle Proxy</button>
+      <button class="primary" id="testBtn" onclick="runTest()">Test Sites</button>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi">
+      <div class="kpi-head"><div class="kpi-label">Active Connections</div></div>
+      <div class="kpi-val" id="kActive">—</div>
+      <div class="kpi-sub" id="kTotal">total: —</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-head"><div class="kpi-label">DPI Bypassed</div></div>
+      <div class="kpi-val" style="color: var(--green)" id="kBypass">—</div>
+      <div class="kpi-sub" id="kAuto">auto-recovered: — · resets: —</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-head">
+        <div class="kpi-label">DNS / DoH Cache</div>
+        <button class="sm" onclick="clearDnsCache()">Clear</button>
+      </div>
+      <div class="kpi-val" style="color: var(--purple)" id="kDns">—</div>
+      <div class="kpi-sub" id="kDoh">doh: — (reused: —)</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-head"><div class="kpi-label">Traffic Routed</div></div>
+      <div class="kpi-val" style="color: var(--cyan)" id="kBytes">—</div>
+      <div class="kpi-sub" id="kDir">↑ — · ↓ —</div>
+    </div>
+  </section>
+
+  <main class="grid">
+    <div>
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Live Connections <span class="ver" id="eventCount">0</span></div>
+          <div class="toolbar">
+            <div class="tabs">
+              <button class="tab active" data-filter="all" onclick="setFilter('all', this)">All</button>
+              <button class="tab" data-filter="bypass" onclick="setFilter('bypass', this)">Bypass</button>
+              <button class="tab" data-filter="auto" onclick="setFilter('auto', this)">Auto</button>
+              <button class="tab" data-filter="direct" onclick="setFilter('direct', this)">Direct</button>
+              <button class="tab" data-filter="issue" onclick="setFilter('issue', this)">Issues</button>
+            </div>
+            <input class="search" id="searchInput" type="search" placeholder="Filter host..." oninput="renderEvents()">
+            <button class="sm" id="pauseBtn" onclick="togglePause()">Pause</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Host</th>
+                <th>Status</th>
+                <th>Latency</th>
+                <th style="text-align:right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="eventsBody">
+              <tr><td colspan="5" class="empty">Waiting for connections...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="testCard">
+        <div class="card-head">
+          <div class="card-title">Connectivity Probe</div>
+          <span class="ver" id="testSummary">ready</span>
+        </div>
+        <div class="card-body">
+          <form class="domain-add" onsubmit="runCustomTest(event)" style="margin-bottom:0">
+            <input id="probeInput" placeholder="Test custom host (e.g. reddit.com, pastebin.com) or click Test Sites" autocomplete="off">
+            <button type="submit">Probe</button>
+          </form>
+          <div class="test-list" id="testList"></div>
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Routing Mode</div>
+          <span class="ver" id="modeBadge">—</span>
+        </div>
+        <div class="card-body">
+          <div class="seg">
+            <button class="seg-btn" id="m-smart" onclick="setMode('smart')">Smart<small>Profiles + Auto</small></button>
+            <button class="seg-btn" id="m-all" onclick="setMode('all')">All HTTPS<small>Every site</small></button>
+            <button class="seg-btn" id="m-list" onclick="setMode('list')">Allowlist<small>Strict list</small></button>
+          </div>
+          <div class="switch-row" style="margin-bottom:0">
+            <div>
+              <span>Zero-Error Auto-Learn</span>
+              <small>Detect ISP resets on any site &amp; retry seamlessly via bypass</small>
+            </div>
+            <input type="checkbox" id="autoLearnCheck" onchange="quickToggleAutoLearn()" style="width:18px;height:18px;accent-color:var(--cyan)">
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="learnedCard" style="display:none">
+        <div class="card-head">
+          <div class="card-title">Auto-Learned Domains <span class="ver" id="learnedCount">0</span></div>
+          <button class="sm" onclick="clearLearned()">Clear All</button>
+        </div>
+        <div class="card-body">
+          <div class="chips" id="learnedChips"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Built-in Profiles <span class="ver" id="effectiveCount">0 domains</span></div>
+        </div>
+        <div class="card-body">
+          <div class="profiles-grid" id="profilesGrid"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">DPI Bypass Engine</div>
+          <span class="ver" id="stratBadge">—</span>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="field">
+              <label for="strategySel">TLS Strategy</label>
+              <select id="strategySel">
+                <option value="combo">combo (record + chunk)</option>
+                <option value="chunk">chunk (TCP split)</option>
+                <option value="tls-record">tls-record (SNI record)</option>
+                <option value="sni-split">sni-split (TCP SNI)</option>
+                <option value="skip">skip (pass-through)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="chunkInput">Chunk Size (bytes)</label>
+              <input id="chunkInput" type="number" min="1" max="64" value="2">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="fakeCountInput">Decoy Packets (0=off)</label>
+              <input id="fakeCountInput" type="number" min="0" max="5" value="0">
+            </div>
+            <div class="field">
+              <label for="fakeTtlInput">Decoy IP TTL</label>
+              <input id="fakeTtlInput" type="number" min="1" max="32" value="6">
+            </div>
+          </div>
+          <div class="switch-row">
+            <div>
+              <span>Persistent DoH (1.1.1.1 / 8.8.8.8)</span>
+              <small>Keep-alive encrypted DNS for bypassed domains</small>
+            </div>
+            <input type="checkbox" id="dohCheck" style="width:18px;height:18px;accent-color:var(--accent)">
+          </div>
+          <button class="primary" style="width:100%" onclick="saveEngine()">Apply &amp; Save Engine</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Custom Rules</div>
+          <div class="tabs">
+            <button class="tab active" id="rt-bypass" onclick="setRuleTab('bypass')">Bypass</button>
+            <button class="tab" id="rt-exclude" onclick="setRuleTab('exclude')">Exclude</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <form class="domain-add" onsubmit="addRuleFromInput(event)">
+            <input id="domainInput" placeholder="Add domain (e.g. pastebin.com)" autocomplete="off">
+            <button type="submit" class="primary">Add</button>
+          </form>
+          <div class="chips" id="domainChips"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+let paused = false;
+let currentFilter = 'all';
+let ruleTab = 'bypass';
+let latestEvents = [];
+let latestStatus = null;
+let configDirty = false;
+
+['strategySel', 'chunkInput', 'fakeCountInput', 'fakeTtlInput', 'dohCheck'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { configDirty = true; });
+});
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function fmtUptime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1024 * 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  return (b / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function fmtTime(ms) {
+  return new Date(ms).toTimeString().slice(0, 8);
+}
+
+function baseDomain(host) {
+  const parts = host.toLowerCase().split('.').filter(Boolean);
+  if (parts.length <= 2) return host.toLowerCase();
+  return parts.slice(-2).join('.');
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function fetchState() {
+  try {
+    const [stRes, evRes] = await Promise.all([
+      fetch('/api/status'),
+      paused ? Promise.resolve(null) : fetch('/api/events?limit=150')
+    ]);
+    if (!stRes.ok) throw new Error('status ' + stRes.status);
+    const st = await stRes.json();
+    latestStatus = st;
+    renderStatus(st);
+    if (evRes && evRes.ok) {
+      latestEvents = await evRes.json();
+      renderEvents();
+    }
+  } catch (e) {
+    document.getElementById('proxyDot').className = 'dot err';
+    document.getElementById('proxyText').textContent = 'Daemon unreachable';
+  }
+}
+
+function renderStatus(st) {
+  document.getElementById('ver').textContent = 'v' + st.version;
+  document.getElementById('subtitle').textContent =
+    `${st.listen_addr} · PID ${st.pid} · uptime ${fmtUptime(st.uptime_secs)}`;
+
+  const dot = document.getElementById('proxyDot');
+  const txt = document.getElementById('proxyText');
+  const btn = document.getElementById('toggleProxyBtn');
+  if (st.system_proxy_enabled) {
+    dot.className = 'dot';
+    txt.textContent = 'System Proxy Active';
+    btn.textContent = 'Disable Proxy';
+    btn.className = 'danger';
+  } else {
+    dot.className = 'dot off';
+    txt.textContent = 'System Proxy Off';
+    btn.textContent = 'Enable Proxy';
+    btn.className = 'success';
+  }
+
+  document.getElementById('kActive').textContent = st.active_connections;
+  document.getElementById('kTotal').textContent = `total: ${st.total_connections.toLocaleString()}`;
+  document.getElementById('kBypass').textContent = st.bypassed_connections.toLocaleString();
+  document.getElementById('kAuto').textContent = `auto-recovered: ${st.auto_recovered_connections} · resets: ${st.reset_connections}`;
+  document.getElementById('kDns').textContent = st.dns_cache_hits.toLocaleString();
+  document.getElementById('kDoh').textContent = `doh: ${st.doh_queries} (reused: ${st.doh_reused}) · cached: ${st.dns_cache_entries}`;
+  document.getElementById('kBytes').textContent = fmtBytes(st.bytes_up + st.bytes_down);
+  document.getElementById('kDir').textContent = `↑ ${fmtBytes(st.bytes_up)} · ↓ ${fmtBytes(st.bytes_down)}`;
+
+  document.getElementById('modeBadge').textContent = st.mode;
+  ['smart', 'all', 'list'].forEach(m => {
+    document.getElementById('m-' + m).classList.toggle('active', st.mode === m);
+  });
+  document.getElementById('autoLearnCheck').checked = st.auto_learn;
+
+  const lc = document.getElementById('learnedCard');
+  if (st.auto_learned && st.auto_learned.length > 0) {
+    lc.style.display = 'block';
+    document.getElementById('learnedCount').textContent = st.auto_learned.length;
+    document.getElementById('learnedChips').innerHTML = st.auto_learned.map(item =>
+      `<span class="chip learned">${esc(item.domain)} <span style="color:var(--text-dim)">(${item.hits})</span>` +
+      `<button title="Pin permanently" onclick="addDomain('${esc(item.domain)}')">★</button>` +
+      `<button class="del" title="Dismiss" onclick="dismissLearned('${esc(item.domain)}')">×</button></span>`
+    ).join('');
+  } else {
+    lc.style.display = 'none';
+  }
+
+  document.getElementById('effectiveCount').textContent = `${st.effective_domains_count} domains`;
+  document.getElementById('profilesGrid').innerHTML = st.profiles.map(p => `
+    <button class="prof-card ${p.enabled ? 'on' : ''}" onclick="toggleProfile('${esc(p.id)}', ${!p.enabled})" title="${esc(p.description)}">
+      <div>
+        <div class="prof-name">${esc(p.label)}</div>
+        <div class="prof-meta">${p.domains_count} domains</div>
+      </div>
+      <span class="prof-pill">${p.enabled ? 'ON' : 'OFF'}</span>
+    </button>
+  `).join('');
+
+  document.getElementById('stratBadge').textContent =
+    st.fake_count > 0 ? `${st.strategy} · ${st.chunk_size}B · fake×${st.fake_count}` : `${st.strategy} · ${st.chunk_size}B`;
+  if (!configDirty) {
+    document.getElementById('strategySel').value = st.strategy;
+    document.getElementById('chunkInput').value = st.chunk_size;
+    document.getElementById('fakeCountInput').value = st.fake_count;
+    document.getElementById('fakeTtlInput').value = st.fake_ttl;
+    document.getElementById('dohCheck').checked = st.doh_for_matched;
+  }
+
+  renderRuleChips(st);
+}
+
+function renderRuleChips(st) {
+  const list = ruleTab === 'bypass' ? st.domains : st.exclude_domains;
+  const el = document.getElementById('domainChips');
+  if (!list.length) {
+    el.innerHTML = `<span style="color:var(--text-muted);font-size:12px">No custom ${ruleTab} domains yet</span>`;
+    return;
+  }
+  const fn = ruleTab === 'bypass' ? 'removeDomain' : 'removeExclude';
+  el.innerHTML = list.map(d =>
+    `<span class="chip">${esc(d)}<button class="del" title="Remove" onclick="${fn}('${esc(d)}')">×</button></span>`
+  ).join('');
+}
+
+function setRuleTab(t) {
+  ruleTab = t;
+  document.getElementById('rt-bypass').classList.toggle('active', t === 'bypass');
+  document.getElementById('rt-exclude').classList.toggle('active', t === 'exclude');
+  document.getElementById('domainInput').placeholder =
+    t === 'bypass' ? 'Add domain to bypass (e.g. pastebin.com)' : 'Add domain to always skip (e.g. bank.com)';
+  if (latestStatus) renderRuleChips(latestStatus);
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('[data-filter]').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderEvents();
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  if (!paused) fetchState();
+}
+
+function renderEvents() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const filtered = latestEvents.filter(ev => {
+    if (currentFilter === 'bypass' && ev.action !== 'bypass' && ev.action !== 'auto-bypass') return false;
+    if (currentFilter === 'auto' && ev.action !== 'auto-bypass') return false;
+    if (currentFilter === 'direct' && ev.action !== 'direct') return false;
+    if (currentFilter === 'issue' && ev.action !== 'reset' && ev.action !== 'error') return false;
+    if (q && !ev.host.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  document.getElementById('eventCount').textContent = filtered.length;
+  const tbody = document.getElementById('eventsBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No matching connections yet</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(ev => {
+    const cls = ev.action === 'bypass' ? 'b-bypass'
+              : ev.action === 'auto-bypass' ? 'b-auto'
+              : ev.action === 'reset' ? 'b-reset'
+              : ev.action === 'error' ? 'b-error' : 'b-direct';
+    const doh = ev.doh ? '<span class="badge b-doh">DoH</span>' : '';
+    const errTitle = ev.error ? ` title="${esc(ev.error)}"` : '';
+    const dom = baseDomain(ev.host);
+    const actBtn = (ev.action === 'bypass' || ev.action === 'auto-bypass')
+      ? `<button class="sm" onclick="addExclude('${esc(dom)}')" title="Exclude ${esc(dom)}">Skip</button>`
+      : `<button class="sm" onclick="addDomain('${esc(dom)}')" title="Add ${esc(dom)} to bypass list">+ Bypass</button>`;
+    return `<tr>
+      <td class="mono" style="color:var(--text-dim)">${fmtTime(ev.timestamp_ms)}</td>
+      <td class="mono host-cell" title="${esc(ev.host)}:${ev.port}">${esc(ev.host)}<span style="color:var(--text-muted)">:${ev.port}</span></td>
+      <td><span class="badge ${cls}"${errTitle}>${esc(ev.action)}</span>${doh}</td>
+      <td class="mono" style="color:var(--text-dim)">${ev.latency_ms}ms</td>
+      <td style="text-align:right">${actBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function setMode(mode) {
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
+  });
+  if (res.ok) { showToast(`Routing mode: ${mode}`); fetchState(); }
+}
+
+async function quickToggleAutoLearn() {
+  const auto_learn = document.getElementById('autoLearnCheck').checked;
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auto_learn })
+  });
+  if (res.ok) { showToast(`Auto-Learn ${auto_learn ? 'enabled' : 'disabled'}`); fetchState(); }
+}
+
+async function toggleProfile(id, enabled) {
+  const res = await fetch('/api/profiles', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, enabled })
+  });
+  if (res.ok) { showToast(`Profile "${id}" ${enabled ? 'enabled' : 'disabled'}`); fetchState(); }
+}
+
+async function addDomain(domain) {
+  const res = await fetch('/api/domains', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain })
+  });
+  const data = await res.json();
+  if (res.ok) { showToast(`Bypassing ${data.domain}`); fetchState(); }
+  else showToast(data.error || 'Invalid domain');
+}
+
+async function removeDomain(domain) {
+  const res = await fetch('/api/domains', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain })
+  });
+  if (res.ok) { showToast(`Removed ${domain}`); fetchState(); }
+}
+
+async function addExclude(domain) {
+  const res = await fetch('/api/exclude', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain })
+  });
+  const data = await res.json();
+  if (res.ok) { showToast(`Excluded ${data.domain}`); fetchState(); }
+}
+
+async function removeExclude(domain) {
+  const res = await fetch('/api/exclude', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain })
+  });
+  if (res.ok) { showToast(`Removed ${domain} from exclude list`); fetchState(); }
+}
+
+async function addRuleFromInput(e) {
+  e.preventDefault();
+  const inp = document.getElementById('domainInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (ruleTab === 'bypass') await addDomain(val);
+  else await addExclude(val);
+  inp.value = '';
+}
+
+async function dismissLearned(domain) {
+  await fetch('/api/learned', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain })
+  });
+  fetchState();
+}
+
+async function clearLearned() {
+  await fetch('/api/learned', { method: 'DELETE' });
+  showToast('Cleared auto-learned domains');
+  fetchState();
+}
+
+async function clearDnsCache() {
+  const res = await fetch('/api/dns/clear', { method: 'POST' });
+  const data = await res.json();
+  if (res.ok) { showToast(`Cleared ${data.cleared} cached DNS records`); fetchState(); }
+}
+
+async function saveEngine() {
+  const payload = {
+    strategy: document.getElementById('strategySel').value,
+    chunk_size: parseInt(document.getElementById('chunkInput').value, 10) || 2,
+    fake_count: parseInt(document.getElementById('fakeCountInput').value, 10) || 0,
+    fake_ttl: parseInt(document.getElementById('fakeTtlInput').value, 10) || 6,
+    doh_for_matched: document.getElementById('dohCheck').checked
+  };
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.ok) {
+    configDirty = false;
+    showToast(`Saved engine: ${payload.strategy} (${payload.chunk_size}B)`);
+    fetchState();
+  } else {
+    showToast('Failed to save engine config');
+  }
+}
+
+async function toggleProxy() {
+  if (!latestStatus) return;
+  const target = !latestStatus.system_proxy_enabled;
+  const btn = document.getElementById('toggleProxyBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/proxy/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: target })
+    });
+    if (res.ok) {
+      showToast(target ? 'macOS system proxy enabled' : 'macOS system proxy disabled');
+      await fetchState();
+    } else showToast('Failed to toggle proxy');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runTest(targets = null) {
+  const btn = document.getElementById('testBtn');
+  const list = document.getElementById('testList');
+  const sum = document.getElementById('testSummary');
+  btn.disabled = true;
+  sum.textContent = 'probing...';
+  list.innerHTML = '<div class="empty" style="padding:12px">Probing sites through Swerve...</div>';
+  try {
+    const res = await fetch('/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(targets ? { targets } : {})
+    });
+    const data = await res.json();
+    const okCount = data.results.filter(r => r.ok).length;
+    sum.textContent = `${okCount}/${data.results.length} reachable`;
+    list.innerHTML = data.results.map(r => `
+      <div class="test-item">
+        <span>${esc(r.host)}</span>
+        <span>
+          <span class="badge ${r.ok ? 'b-bypass' : 'b-reset'}">${r.ok ? 'HTTP ' + r.status : esc(r.error || 'FAIL')}</span>
+          <span style="color:var(--text-dim);margin-left:6px">${r.latency_ms}ms</span>
+        </span>
+      </div>
+    `).join('');
+  } catch (e) {
+    sum.textContent = 'error';
+    list.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    fetchState();
+  }
+}
+
+function runCustomTest(e) {
+  e.preventDefault();
+  const inp = document.getElementById('probeInput');
+  const raw = inp.value.trim();
+  if (!raw) { runTest(); return; }
+  const targets = raw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+  runTest(targets);
+}
+
+fetchState();
+setInterval(fetchState, 1500);
+</script>
+</body>
+</html>
