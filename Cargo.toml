@@ -4,6 +4,11 @@ version = "0.2.0"
 edition = "2024"
 description = "Fast, macOS-native DPI bypass proxy with zero-error auto-learn, persistent DoH, and live web UI"
 license = "MIT"
+repository = "https://github.com/yyamandevrim/swerve"
+readme = "README.md"
+keywords = ["dpi", "proxy", "macos", "censorship", "discord"]
+categories = ["command-line-utilities", "network-programming"]
+rust-version = "1.85"
 
 [[bin]]
 name = "swerve"
